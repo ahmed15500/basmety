@@ -32,6 +32,39 @@ function saveDays(){ LS.set("basmety_days", days); }
 function saveSettings(){ LS.set("basmety_settings", settings); }
 function saveLog(){ LS.set("basmety_sync_log", syncLog.slice(-40)); }
 
+/* ---------- الثيمات (٥ معتمدة — نفس باليتات موك-أب الهاتف) ---------- */
+const THEMES = [
+  { id:"purple", name:"البنفسجي الملكي", dots:["#6D28D9","#22D3EE","#FDE68A"] },
+  { id:"green",  name:"الأخضر الحيوي",  dots:["#22C55E","#16A34A","#BBF7D0"] },
+  { id:"night",  name:"الليلي",         dots:["#0F172A","#22D3EE","#A78BFA"] },
+  { id:"gold",   name:"المؤسسي الذهبي", dots:["#0B2A4A","#C9A227","#E8EDF3"] },
+  { id:"copper", name:"الدافئ النحاسي", dots:["#B45309","#CE8B5F","#F5DEB8"] }
+];
+function savedTheme(){
+  let t = null;
+  try{ t = localStorage.getItem("basmety_theme"); }catch(e){}
+  return THEMES.some(x => x.id === t) ? t : "purple";
+}
+function applyTheme(id, save){
+  if(!THEMES.some(x => x.id === id)) id = "purple";
+  document.documentElement.setAttribute("data-theme", id);
+  if(save !== false){ try{ localStorage.setItem("basmety_theme", id); }catch(e){} }
+  renderThemePicker();
+}
+function renderThemePicker(){
+  const grid = document.getElementById("themeGrid");
+  if(!grid) return;
+  const cur = document.documentElement.getAttribute("data-theme") || "purple";
+  grid.innerHTML = THEMES.map(t =>
+    '<button type="button" class="theme-card'+(t.id === cur ? " active" : "")+'" data-theme-pick="'+t.id+'">' +
+    '<span class="t-name">'+t.name+(t.id === cur ? ' <span class="t-check">✓ شغال دلوقتي</span>' : "")+'</span>' +
+    '<span class="t-dots">'+t.dots.map(c => '<i style="background:'+c+'"></i>').join("")+'</span>' +
+    '</button>'
+  ).join("");
+  grid.querySelectorAll("[data-theme-pick]").forEach(b =>
+    b.addEventListener("click", () => applyTheme(b.getAttribute("data-theme-pick"))));
+}
+
 /* ---------- أدوات وقت ---------- */
 const pad = n => String(n).padStart(2,"0");
 function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -606,7 +639,7 @@ $("settingsForm").addEventListener("submit", e => {
 });
 $("btnWipe").addEventListener("click", () => {
   if(confirm("مسح كل بيانات «بصمتي» من المتصفح ده؟ (الأيام، التصنيفات، الإعدادات، سجل المزامنة)")){
-    ["basmety_days","basmety_settings","basmety_holidays_cache","basmety_sync_log","basmety_erp_email"]
+    ["basmety_days","basmety_settings","basmety_holidays_cache","basmety_sync_log","basmety_erp_email","basmety_theme"]
       .forEach(k => localStorage.removeItem(k));
     location.reload();
   }
@@ -646,6 +679,7 @@ document.querySelectorAll("#tabs button").forEach(b =>
 
 /* ---------- بداية ---------- */
 (function init(){
+  applyTheme(savedTheme(), false);
   $("setWindowStart").value = settings.windowStart;
   $("setLateThreshold").value = settings.lateThreshold;
   $("setRequiredHours").value = settings.requiredHours;
