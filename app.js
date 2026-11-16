@@ -476,116 +476,221 @@ function renderAll(){
 /* الدالة دي مش بتتنفذ جوه بصمتي أبدًا — بناخد نصّها البرمجي ونحوّله لزرار مفضلة.
    لازم تفضل مكتفية ذاتيًا تمامًا: متستخدمش أي متغير أو دالة من بصمتي. */
 function erpExporter(){
-  var T = function(m){
+  var T = function(m, ms){
+    var old = document.getElementById("basmetyToast");
+    if(old) old.remove();
     var d = document.createElement("div");
+    d.id = "basmetyToast";
     d.textContent = m;
     d.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:999999;background:#1e1b3a;color:#fff;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:15px;line-height:1.8;direction:rtl;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:92%";
     document.body.appendChild(d);
-    setTimeout(function(){ d.remove(); }, 8000);
+    setTimeout(function(){ d.remove(); }, ms || 8000);
   };
   var LOGIN_MSG = "بصمتي: سجّل دخول في الـERP الأول وبعدين دوس الزرار تاني";
   if(/login/i.test(location.pathname + location.hash)){ T(LOGIN_MSG); return; }
+  T("بصمتي: جارٍ قراءة بصماتك من الصفحة…", 30000);
   var collected = {};
-  function addDay(dt, tm, st){
-    if(!dt || !tm || !st) return;
-    var r = collected[dt] || (collected[dt] = {});
-    if(st === "IN"){ if(!r.in || tm < r.in) r.in = tm; }
-    if(st === "OUT"){ if(!r.out || tm > r.out) r.out = tm; }
+  var recSeen = {};
+  var counts = { dom: 0, checkin: 0, attendance: 0, html: 0 };
+  var errors = {};
+  var LABELS = { dom: "من الصفحة الحالية", checkin: "من واجهة Employee Checkin", attendance: "من واجهة Attendance", html: "من نسخة الصفحة المحمّلة" };
+  function addRecord(strategy, date, hhmm, fullTs, st){
+    if(!date || !hhmm || (st !== "IN" && st !== "OUT")) return;
+    var key = (fullTs || (date + " " + hhmm + ":00")) + "|" + st;
+    if(recSeen[key]) return;
+    recSeen[key] = 1;
+    counts[strategy]++;
+    var r = collected[date] || (collected[date] = {});
+    if(st === "IN"){ if(!r.in || hhmm < r.in) r.in = hhmm; }
+    if(st === "OUT"){ if(!r.out || hhmm > r.out) r.out = hhmm; }
   }
-  function jget(u){
-    return fetch(u, { credentials: "include" }).then(function(r){
-      if(!r.ok) throw new Error("http " + r.status);
-      return r.json();
-    });
-  }
-  var p = Promise.resolve();
-  /* استراتيجية أ: Employee Checkin */
-  p = p.then(function(){
-    return jget("/api/resource/Employee%20Checkin?fields=" + encodeURIComponent("[\"time\",\"log_type\"]") + "&order_by=time%20asc&limit_page_length=500")
-      .then(function(j){
-        (j.data || []).forEach(function(x){
-          if(!x || !x.time) return;
-          addDay(String(x.time).slice(0, 10), String(x.time).slice(11, 16), x.log_type);
-        });
-      }).catch(function(){});
-  });
-  /* استراتيجية ب: Attendance */
-  p = p.then(function(){
-    if(Object.keys(collected).length) return;
-    return jget("/api/resource/Attendance?fields=" + encodeURIComponent("[\"attendance_date\",\"in_time\",\"out_time\"]") + "&order_by=attendance_date%20asc&limit_page_length=200")
-      .then(function(j){
-        (j.data || []).forEach(function(x){
-          if(!x || !x.attendance_date) return;
-          var r = {};
-          if(x.in_time) r.in = String(x.in_time).slice(11, 16);
-          if(x.out_time) r.out = String(x.out_time).slice(11, 16);
-          if(r.in || r.out) collected[x.attendance_date] = r;
-        });
-      }).catch(function(){});
-  });
-  /* استراتيجية ج: كشط صفحة CheckIn/CheckOut + متابعة ترقيم الصفحات (٥ صفحات كحد أقصى) */
-  p = p.then(function(){
-    if(Object.keys(collected).length) return;
-    var base = location.origin + "/hri/en/check_in_out";
-    var seen = {}, queue = [], fetched = 0;
-    function rowsFrom(doc){
-      var trs = doc.querySelectorAll("tr");
-      for(var i = 0; i < trs.length; i++){
-        var tds = trs[i].querySelectorAll("td"), dt = null, tm = null, st = null;
-        for(var c = 0; c < tds.length; c++){
-          var cell = tds[c].textContent.trim();
-          var m = cell.match(/([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}:[0-9]{2})/);
-          if(m){ dt = m[1]; tm = m[2]; }
-          if(cell === "IN" || cell === "OUT") st = cell;
-        }
-        if(dt && st) addDay(dt, tm, st);
-      }
-      var links = doc.querySelectorAll("a[href]");
-      for(var k = 0; k < links.length; k++){
-        var h = links[k].getAttribute("href") || "";
-        if(/page/i.test(h)){
-          try{
-            var abs = new URL(h, base).href;
-            if(!seen[abs] && queue.indexOf(abs) < 0) queue.push(abs);
-          }catch(e){}
-        }
-      }
-    }
-    rowsFrom(document);
-    function next(){
-      if(!queue.length || fetched >= 4) return Promise.resolve();
-      var u = queue.shift();
-      if(seen[u]) return next();
-      seen[u] = 1; fetched++;
-      return fetch(u, { credentials: "include" }).then(function(r){ return r.text(); })
-        .then(function(h){ rowsFrom(new DOMParser().parseFromString(h, "text/html")); })
-        .catch(function(){}).then(next);
-    }
-    return fetch(base, { credentials: "include" }).then(function(r){ return r.text(); })
-      .then(function(h){ rowsFrom(new DOMParser().parseFromString(h, "text/html")); })
-      .catch(function(){}).then(next);
-  });
-  p.then(function(){
-    var ks = Object.keys(collected);
-    if(!ks.length){ T(LOGIN_MSG); return; }
-    var payload = { v: 1, src: "erp", exportedAt: new Date().toISOString(), days: collected };
-    var json = JSON.stringify(payload);
-    var b = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    var done = function(){
-      window.open("https://ahmed15500.github.io/basmety/#import=" + b, "_blank");
-      T("بصمتي: تم تجهيز " + ks.length + " يوم — اتفتح تبويب بصمتي، لو ما اتفتحش الصق اللي اتنسخ في خانة الاستيراد هناك");
-    };
+  function wait(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+  function copyText(text, done){
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(json).then(done, done);
+      navigator.clipboard.writeText(text).then(done, done);
     } else {
       try{
         var ta = document.createElement("textarea");
-        ta.value = json; document.body.appendChild(ta); ta.select();
+        ta.value = text; document.body.appendChild(ta); ta.select();
         document.execCommand("copy"); ta.remove();
       }catch(e){}
       done();
     }
-  });
+  }
+  /* ---------- مسح نصّي لا يعتمد على بنية الجدول ----------
+     بندوّر على أي نص شكله تاريخ ووقت كامل، وبعدين نلاقي الحالة IN/OUT
+     من أصغر حاوية حوالين النص ده (صف جدول أو أي عنصر أب) — كده القراءة
+     بتشتغل سواء الصفوف مرسومة بـtable أو divs أو أي markup تاني. */
+  function countDt(text){
+    var m = String(text || "").match(/\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/g);
+    return m ? m.length : 0;
+  }
+  function stateInText(text){
+    var m = String(text || "").match(/\b(IN|OUT)\b/);
+    return m ? m[1] : null;
+  }
+  function exactStateIn(container){
+    if(!container || !container.querySelectorAll) return null;
+    var els = container.querySelectorAll("*");
+    for(var i = 0; i < els.length; i++){
+      var t = (els[i].textContent || "").replace(/\s+/g, " ").trim();
+      if(t === "IN" || t === "OUT") return t;
+    }
+    return null;
+  }
+  function stateForNode(node, dtStr){
+    var el = node.parentElement || node.parentNode;
+    if(!el) return null;
+    if(el.closest){
+      var tr = el.closest("tr");
+      if(tr){
+        var s0 = exactStateIn(tr) || stateInText(tr.textContent);
+        if(s0) return s0;
+      }
+    }
+    var cur = el, hops = 0;
+    while(cur && hops < 10){
+      var t = cur.textContent || "";
+      if(t.indexOf(dtStr) === -1 || countDt(t) > 1) break;
+      var s = exactStateIn(cur) || stateInText(t);
+      if(s) return s;
+      cur = cur.parentElement; hops++;
+    }
+    return null;
+  }
+  function scanDoc(doc, strategy){
+    if(!doc) return;
+    var scope = doc.body || doc.documentElement;
+    if(!scope || !doc.createTreeWalker) return;
+    var SHOW_TEXT = (typeof NodeFilter !== "undefined" && NodeFilter.SHOW_TEXT) || 4;
+    var walker;
+    try{ walker = doc.createTreeWalker(scope, SHOW_TEXT, null); }catch(e){ return; }
+    var node;
+    while((node = walker.nextNode())){
+      var parent = node.parentElement || node.parentNode;
+      if(parent && /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA)$/.test(parent.tagName || "")) continue;
+      var txt = node.nodeValue || "";
+      if(txt.indexOf("-") === -1 || txt.indexOf(":") === -1) continue;
+      var re = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/g, m;
+      while((m = re.exec(txt)) !== null){
+        var dtStr = m[0].replace("T", " ");
+        var st = stateForNode(node, dtStr);
+        if(st) addRecord(strategy, dtStr.slice(0, 10), dtStr.slice(11, 16), dtStr, st);
+      }
+    }
+  }
+  /* ---------- أزرار ترقيم الصفحات (تُفضّل اللي جوه حاوية ترقيم) ---------- */
+  function inPager(el){
+    var cur = el, hops = 0;
+    while(cur && hops < 6){
+      var cls = (cur.className && cur.className.baseVal !== undefined) ? cur.className.baseVal : (cur.className || "");
+      if(/pagination|pager|datatable/i.test(String(cls) + " " + (cur.id || ""))) return true;
+      if(cur.tagName === "NAV") return true;
+      cur = cur.parentElement; hops++;
+    }
+    return false;
+  }
+  function findControl(labels){
+    var els = document.querySelectorAll("a, button, li, span, [role='button']");
+    var fallback = null;
+    for(var i = 0; i < els.length; i++){
+      var el = els[i];
+      var t = (el.textContent || "").replace(/\s+/g, " ").trim();
+      if(labels.indexOf(t) === -1) continue;
+      if(el.querySelector && el.querySelector("a, button")) continue;
+      if(inPager(el)) return el;
+      if(!fallback && (el.tagName === "A" || el.tagName === "BUTTON")) fallback = el;
+    }
+    return fallback;
+  }
+  /* استراتيجية ٠: مسح الصفحة الحالية زي ما هي مرسومة + تقليب صفحات الجدول بالنقر */
+  function strategyDom(){
+    return wait(250).then(function(){
+      scanDoc(document, "dom");
+      var page = 1;
+      function step(){
+        if(page >= 5) return Promise.resolve();
+        var ctl = findControl([String(page + 1)]) || findControl(["›", "»", "Next", "التالي", ">"]);
+        if(!ctl) return Promise.resolve();
+        try{ ctl.click(); }catch(e){ return Promise.resolve(); }
+        page++;
+        return wait(600).then(function(){ scanDoc(document, "dom"); }).then(step);
+      }
+      return step();
+    });
+  }
+  function jget(u){
+    return Promise.resolve().then(function(){
+      return fetch(u, { credentials: "include" });
+    }).then(function(r){
+      if(!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    });
+  }
+  /* استراتيجية أ: Employee Checkin */
+  function strategyCheckin(){
+    return jget("/api/resource/Employee%20Checkin?fields=" + encodeURIComponent("[\"time\",\"log_type\"]") + "&order_by=time%20asc&limit_page_length=500")
+      .then(function(j){
+        (j.data || []).forEach(function(x){
+          if(!x || !x.time) return;
+          var ts = String(x.time).replace("T", " ");
+          addRecord("checkin", ts.slice(0, 10), ts.slice(11, 16), ts.slice(0, 19), x.log_type);
+        });
+      }).catch(function(e){ errors.checkin = String((e && e.message) || e); });
+  }
+  /* استراتيجية ب: Attendance */
+  function strategyAttendance(){
+    return jget("/api/resource/Attendance?fields=" + encodeURIComponent("[\"attendance_date\",\"in_time\",\"out_time\"]") + "&order_by=attendance_date%20asc&limit_page_length=200")
+      .then(function(j){
+        (j.data || []).forEach(function(x){
+          if(!x || !x.attendance_date) return;
+          if(x.in_time){
+            var ti = String(x.in_time).replace("T", " ");
+            addRecord("attendance", x.attendance_date, ti.slice(11, 16), ti.slice(0, 19), "IN");
+          }
+          if(x.out_time){
+            var to = String(x.out_time).replace("T", " ");
+            addRecord("attendance", x.attendance_date, to.slice(11, 16), to.slice(0, 19), "OUT");
+          }
+        });
+      }).catch(function(e){ errors.attendance = String((e && e.message) || e); });
+  }
+  /* استراتيجية ج: جلب صفحة CheckIn/CheckOut ومسحها بنفس المسح النصّي */
+  function strategyHtml(){
+    return Promise.resolve().then(function(){
+      return fetch(location.origin + "/hri/en/check_in_out", { credentials: "include" });
+    }).then(function(r){ return r.text(); })
+      .then(function(h){ scanDoc(new DOMParser().parseFromString(h, "text/html"), "html"); })
+      .catch(function(e){ errors.html = String((e && e.message) || e); });
+  }
+  var finished = false;
+  function finish(){
+    if(finished) return;
+    finished = true;
+    var ks = Object.keys(collected);
+    var total = counts.dom + counts.checkin + counts.attendance + counts.html;
+    if(!ks.length || !total){
+      var diag = JSON.stringify({ strategies: counts, errors: errors, url: location.href });
+      copyText(diag, function(){
+        T("بصمتي: لم يتم العثور على أي بصمة — الصفحة الحالية: " + counts.dom + "، Employee Checkin: " + counts.checkin + "، Attendance: " + counts.attendance + "، نسخة الصفحة: " + counts.html + ". اتنسخ تشخيص صغير في الحافظة، الصقه وابعه لينا لو المشكلة اتكررت. (اتأكد إنك على صفحة CheckIn / Checkout وانت مسجّل دخول)", 20000);
+      });
+      return;
+    }
+    var src = counts.dom ? LABELS.dom : (counts.checkin ? LABELS.checkin : (counts.attendance ? LABELS.attendance : LABELS.html));
+    var payload = { v: 1, src: "erp", exportedAt: new Date().toISOString(), days: collected };
+    var json = JSON.stringify(payload);
+    var b = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    copyText(json, function(){
+      window.open("https://ahmed15500.github.io/basmety/#import=" + b, "_blank");
+      T("بصمتي: تم العثور على " + total + " بصمة (" + src + ") في " + ks.length + " يوم — جارٍ الفتح في بصمتي. لو التبويب ما اتفتحش، الصق اللي اتنسخ في خانة الاستيراد هناك", 10000);
+    });
+  }
+  var p = Promise.resolve();
+  p = p.then(function(){ return strategyDom(); }).catch(function(e){ errors.dom = String((e && e.message) || e); });
+  p = p.then(function(){ if(!Object.keys(collected).length) return strategyCheckin(); });
+  p = p.then(function(){ if(!Object.keys(collected).length) return strategyAttendance(); });
+  p = p.then(function(){ if(!Object.keys(collected).length) return strategyHtml(); });
+  p.then(finish, finish);
 }
 const ERP_EXPORTER_SRC = "(" + erpExporter.toString() + ")();";
 const BOOKMARKLET_HREF = "javascript:" + encodeURIComponent(ERP_EXPORTER_SRC);
