@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بصمتي — متتبع الحضور والانصراف</title>
+<link rel="icon" type="image/webp" href="logo.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <img src="logo.webp" alt="لوجو بصمتي" class="brand-logo">
+    <div>
+      <h1>بصمتي</h1>
+      <p>متتبع بصمة الـERP — ٨ ساعات من بصمتك</p>
+    </div>
+  </div>
+  <div class="today-chip" id="todayChip"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-view="home" class="active">🏠 الرئيسية</button>
+  <button data-view="deficit">🧾 أيام ناقصة <span class="badge" id="deficitBadge" hidden>0</span></button>
+  <button data-view="overtime">⏫ الأوفر تايم</button>
+  <button data-view="summary">📊 ملخص الشهر</button>
+  <button data-view="holidays">🎉 الإجازات الرسمية</button>
+  <button data-view="settings">⚙️ الإعدادات والمزامنة</button>
+</nav>
+
+<div class="alert-banner" id="missingAlert" hidden>
+  ⚠️ فيه <b id="missingAlertCount">0</b> يوم شغل عدى من غير بصمة ولسه متصنّفش.
+  <button id="missingAlertBtn">صنّفهم دلوقتي</button>
+</div>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section class="view active" id="view-home">
+    <div class="card countdown-card">
+      <h2>يومك النهاردة</h2>
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 200 200" width="230" height="230" aria-label="تقدم اليوم">
+          <circle class="ring-bg" cx="100" cy="100" r="86"></circle>
+          <circle class="ring-fg" id="ringFg" cx="100" cy="100" r="86"></circle>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-pct" id="ringPct">0%</div>
+          <div class="ring-time" id="ringTime">--:--:--</div>
+          <div class="ring-label" id="ringLabel">لسه مفيش بصمة دخول النهاردة</div>
+        </div>
+      </div>
+      <p class="stage" id="stagePhrase">ابصم دخول من الـERP وارجع شوف العدّاد وهو بيجري 🏃</p>
+      <div class="today-grid">
+        <div class="stat"><span>بصمة الدخول</span><b id="statIn">—</b></div>
+        <div class="stat"><span>مرواحك الساعة</span><b id="statTarget">—</b></div>
+        <div class="stat"><span>اشتغلت</span><b id="statElapsed">—</b></div>
+        <div class="stat"><span>فاضل</span><b id="statRemain">—</b></div>
+      </div>
+      <div class="quick-row">
+        <button class="btn primary" id="btnCheckinNow">🟢 بصمت دخول دلوقتي</button>
+        <button class="btn warn" id="btnCheckoutNow">🔴 بصمت خروج دلوقتي</button>
+      </div>
+      <p class="hint">الأزرار دي بتسجّل وقت دلوقتي في جهازك على طول — البصمة الرسمية بتفضل بتاعة جهاز الـERP.</p>
+    </div>
+
+    <div class="card">
+      <h2>✍️ تسجيل يوم يدويًا</h2>
+      <p class="hint">سجّل دخول وخروج أي يوم زي ما ظهروا في الـERP بالظبط (المزامنة المباشرة من المتصفح مقفولة بسياسة CORS بتاعة الـERP — الشرح في «الإعدادات والمزامنة»).</p>
+      <form id="entryForm" class="entry-form">
+        <label>التاريخ <input type="date" id="entryDate" required></label>
+        <label>الدخول <input type="time" id="entryIn"></label>
+        <label>الخروج <input type="time" id="entryOut"></label>
+        <button class="btn primary" type="submit">💾 حفظ اليوم</button>
+        <button class="btn ghost" type="button" id="btnDemo">🎲 بيانات تجريبية</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>📅 أيام الشهر ده</h2>
+      <div class="month-nav">
+        <button class="btn small" id="prevMonth">◀ الشهر اللي فات</button>
+        <b id="monthTitle"></b>
+        <button class="btn small" id="nextMonth">الشهر الجاي ▶</button>
+      </div>
+      <div id="daysList" class="days-list"></div>
+    </div>
+
+    <div class="card" id="classifyCard" hidden>
+      <h2>🗂️ تصنيف الأيام اللي من غير بصمة</h2>
+      <p class="hint">يوم شغل عدى (مش ويك إند ولا إجازة رسمية) ومفيهوش بصمة — قولي كان إيه عشان ميتحسبش غياب ولا نقص.</p>
+      <div id="missingList"></div>
+    </div>
+  </section>
+
+  <!-- ============ DEFICIT ============ -->
+  <section class="view" id="view-deficit">
+    <div class="card">
+      <h2>🏦 بنك الأذونات — <span id="bankMonth"></span></h2>
+      <div class="bank-row" id="bankSlots"></div>
+      <p class="hint">عندك إذنين في الشهر، كل إذن بيغطي لحد ساعتين (١٢٠ دقيقة). لما تستخدم إذن على يوم ناقص، دوس «استخدمت إذن» وهيتخصم من البنك.</p>
+      <div class="today-grid">
+        <div class="stat"><span>أذونات مستخدمة</span><b id="bankUsed">0 / 2</b></div>
+        <div class="stat"><span>أذونات فاضلة</span><b id="bankLeft">2</b></div>
+        <div class="stat"><span>إجمالي النقص الشهر ده</span><b id="bankDeficitTotal">—</b></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🧾 الأيام الناقصة</h2>
+      <div id="deficitList"></div>
+    </div>
+  </section>
+
+  <!-- ============ OVERTIME ============ -->
+  <section class="view" id="view-overtime">
+    <div class="card">
+      <h2>⏫ الأوفر تايم — <span id="otMonth"></span></h2>
+      <div class="big-total" id="otTotal">0 ساعة 0 دقيقة</div>
+      <p class="hint">أي وقت فوق الـ٨ ساعات من بصمة دخولك بيتحسب أوفر تايم.</p>
+      <div id="overtimeList"></div>
+    </div>
+  </section>
+
+  <!-- ============ SUMMARY ============ -->
+  <section class="view" id="view-summary">
+    <div class="card">
+      <h2>📊 ملخص <span id="summaryMonth"></span></h2>
+      <div class="today-grid summary-grid">
+        <div class="stat"><span>أيام اشتغلتها</span><b id="sumWorked">0</b></div>
+        <div class="stat"><span>إجمالي الشغل</span><b id="sumWorkedTime">—</b></div>
+        <div class="stat"><span>إجمالي النقص</span><b id="sumDeficit">—</b></div>
+        <div class="stat"><span>إجمالي الأوفر تايم</span><b id="sumOvertime">—</b></div>
+        <div class="stat"><span>أذونات مستخدمة</span><b id="sumPerms">0 / 2</b></div>
+        <div class="stat"><span>أيام من غير بصمة لسه متصنّفتش</span><b id="sumMissing">0</b></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🗂️ أيام متصنّفة الشهر ده</h2>
+      <div id="classifiedList"></div>
+    </div>
+  </section>
+
+  <!-- ============ HOLIDAYS ============ -->
+  <section class="view" id="view-holidays">
+    <div class="card">
+      <h2>🎉 الإجازات الرسمية في مصر</h2>
+      <p class="hint">المصدر الرسمي: موقع رئاسة الجمهورية — <span dir="ltr">presidency.eg</span><br>
+      حالة المصدر: <b id="holidaySource">القائمة المدمجة في التطبيق</b> — آخر تحديث: <span id="holidayUpdated">—</span></p>
+      <button class="btn primary" id="btnHolidayUpdate">🔄 تحديث من الموقع الرسمي</button>
+      <p class="hint" id="holidayMsg"></p>
+      <div id="holidaysList"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS + ERP SYNC ============ -->
+  <section class="view" id="view-settings">
+    <div class="card">
+      <h2>⚙️ إعدادات الشغل</h2>
+      <form id="settingsForm" class="settings-form">
+        <label>بداية فترة الدخول المرنة <input type="time" id="setWindowStart"></label>
+        <label>آخر ميعاد دخول (التأخير بيتحسب بعده بس) <input type="time" id="setLateThreshold"></label>
+        <label>ساعات الشغل المطلوبة في اليوم <input type="number" id="setRequiredHours" min="1" max="16" step="0.5"></label>
+        <button class="btn primary" type="submit">💾 حفظ الإعدادات</button>
+      </form>
+      <p class="hint">القاعدة: التأخير = الدخول − آخر ميعاد دخول (١٠:٣٠)، والدخول قبلها مهما كان مش تأخير. الـ٨ ساعات بتتعدّ من بصمة دخولك الفعلية، ومرواحك المستهدف = دخولك + ٨ ساعات.</p>
+    </div>
+
+    <div class="card">
+      <h2>🔗 مزامنة الـERP</h2>
+      <form id="erpForm" class="settings-form">
+        <label>إيميل الـERP <input type="email" id="erpEmail" autocomplete="username" placeholder="name@hu.edu.eg"></label>
+        <label>باسورد الـERP <input type="password" id="erpPassword" autocomplete="current-password"></label>
+        <button class="btn primary" type="submit" id="btnSync">🔄 مزامنة من ERP</button>
+      </form>
+      <div class="cors-note">
+        <b>⚠️ تنبيه مهم وصريح:</b> موقع الـERP (<span dir="ltr">erp.hu.edu.eg</span>) مش بيبعت ترويسات CORS،
+        فالمتصفح بيمنع أي صفحة من موقع تاني إنها تقرا بياناته — يعني المزامنة المباشرة من نسخة الويب
+        <b>هتتفشل غالبًا وده متوقع ومقصود من إعدادات الـERP نفسه</b>، مش عطل في التطبيق.
+        البدائل الشغالة: التسجيل اليدوي هنا، أو <b>تطبيق الأندرويد «بصمتي»</b> لأنه مش مقيد بـCORS وبيزامن عادي.
+        بيانات الدخول بتتخزن على جهازك انت بس، ومبتتبعتش لأي وسيط أو بروكسي خارجي أبدًا — المحاولة بتروح للـERP مباشرة فقط.
+      </div>
+      <h3>📜 سجل المزامنة</h3>
+      <div id="syncLog" class="sync-log"></div>
+      <button class="btn ghost small" id="btnClearLog">مسح السجل</button>
+    </div>
+
+    <div class="card danger-zone">
+      <h2>🗑️ بيانات التطبيق</h2>
+      <p class="hint">كل البيانات متخزنة في متصفحك (localStorage) على الجهاز ده بس.</p>
+      <button class="btn warn" id="btnWipe">مسح كل البيانات</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>بصمتي — نسخة الويب • بياناتك على جهازك بس • اللوجو: بصمة على شكل رقم ٨</p>
+</footer>
+
+<!-- Classification modal -->
+<div class="modal" id="classifyModal" hidden>
+  <div class="modal-box">
+    <h3>تصنيف يوم <span id="classifyDateLabel"></span></h3>
+    <form id="classifyForm">
+      <label>اليوم ده كان إيه؟
+        <select id="classifyKind" required>
+          <option value="leave">إجازة</option>
+          <option value="mission">مأمورية</option>
+          <option value="absent">غياب</option>
+          <option value="forgot">اشتغلت بس نسيت أبصم</option>
+          <option value="other">أخرى</option>
+        </select>
+      </label>
+      <label id="leaveTypeRow">نوع الإجازة
+        <select id="classifyLeaveType">
+          <option value="عارضة">عارضة</option>
+          <option value="سنوية">سنوية</option>
+          <option value="مرضية">مرضية</option>
+          <option value="بدون مرتب">بدون مرتب</option>
+          <option value="أخرى">أخرى</option>
+        </select>
+      </label>
+      <label id="leaveOtherRow" hidden>نوع الإجازة (اكتبه) <input type="text" id="classifyLeaveOther"></label>
+      <label id="missionRow" hidden>روحت فين؟ (المأمورية) <input type="text" id="classifyDestination" placeholder="مثال: سيكم — مزرعة بلبيس"></label>
+      <label id="noteRow" hidden>ملحوظة <input type="text" id="classifyNote"></label>
+      <div class="modal-actions">
+        <button class="btn primary" type="submit">💾 حفظ التصنيف</button>
+        <button class="btn ghost" type="button" id="classifyCancel">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+/* بصمتي — نسخة الويب | ثيم موف/أزرق على هوية اللوجو (بصمة رقم ٨) */
+:root{
+  --purple:#6d28d9; --purple2:#7c3aed; --blue:#2563eb; --blue2:#3b82f6;
+  --grad:linear-gradient(135deg,#7c3aed,#2563eb);
+  --bg:#eef0fe; --card:#ffffff; --ink:#1e1b3a; --muted:#6b7280;
+  --green:#059669; --red:#dc2626; --orange:#ea580c; --gold:#d97706;
+  --line:#e5e7f5; --radius:18px;
+  --shadow:0 6px 24px rgba(76,29,149,.10);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Cairo",system-ui,"Segoe UI",Tahoma,Arial,sans-serif;
+  padding-bottom:30px;
+}
+
+/* ===== Top bar ===== */
+.topbar{
+  background:var(--grad); color:#fff; padding:16px 20px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.brand{display:flex; align-items:center; gap:14px}
+.brand-logo{width:64px; height:64px; border-radius:16px; background:#fff; object-fit:cover; box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.brand h1{margin:0; font-size:30px; font-weight:900; line-height:1}
+.brand p{margin:4px 0 0; font-size:13px; opacity:.9}
+.today-chip{background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35);
+  padding:8px 14px; border-radius:999px; font-weight:700; font-size:14px}
+
+/* ===== Tabs ===== */
+.tabs{
+  display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px 0; max-width:980px; margin:0 auto;
+}
+.tabs button{
+  border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer;
+  padding:9px 16px; border-radius:999px; font-family:inherit; font-weight:700; font-size:15px;
+}
+.tabs button.active{background:var(--grad); color:#fff; border-color:transparent}
+.badge{background:var(--red); color:#fff; border-radius:999px; padding:0 8px; font-size:12px}
+
+/* ===== Alert ===== */
+.alert-banner{
+  max-width:980px; margin:12px auto 0; background:#fef3c7; border:1px solid #f59e0b;
+  color:#92400e; border-radius:14px; padding:12px 16px; font-size:15px;
+  width:calc(100% - 32px);
+}
+.alert-banner button{background:var(--gold); color:#fff; border:0; border-radius:10px;
+  padding:6px 14px; font-family:inherit; font-weight:700; cursor:pointer; margin-inline-start:8px}
+
+/* ===== Layout / cards ===== */
+main{max-width:980px; margin:0 auto; padding:16px}
+.view{display:none}
+.view.active{display:block}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:20px; margin-bottom:16px;
+}
+.card h2{margin:0 0 12px; font-size:21px; font-weight:900}
+.card h3{margin:16px 0 8px}
+.hint{color:var(--muted); font-size:13.5px; line-height:1.7}
+
+/* ===== Countdown ring ===== */
+.countdown-card{text-align:center}
+.ring-wrap{position:relative; width:230px; height:230px; margin:6px auto}
+.ring{transform:rotate(-90deg)}
+.ring circle{fill:none; stroke-width:13; stroke-linecap:round}
+.ring-bg{stroke:#e7e7f7}
+.ring-fg{stroke:url(#none); stroke:#7c3aed; transition:stroke-dashoffset .6s ease, stroke .4s}
+.ring-fg.overtime{stroke:var(--green)}
+.ring-center{position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px; padding:0 26px}
+.ring-pct{font-size:34px; font-weight:900; background:var(--grad);
+  -webkit-background-clip:text; background-clip:text; color:transparent}
+.ring-time{font-size:25px; font-weight:900; direction:ltr; font-variant-numeric:tabular-nums}
+.ring-label{font-size:13px; color:var(--muted); line-height:1.5}
+.stage{font-size:17px; font-weight:700; margin:10px 0 4px}
+
+.today-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-top:14px}
+.stat{background:#f6f6ff; border:1px solid var(--line); border-radius:14px; padding:10px}
+.stat span{display:block; color:var(--muted); font-size:12.5px}
+.stat b{font-size:19px; font-variant-numeric:tabular-nums}
+.summary-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+
+/* ===== Buttons & forms ===== */
+.btn{
+  border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer;
+  padding:10px 18px; border-radius:12px; font-family:inherit; font-weight:700; font-size:15px;
+}
+.btn.primary{background:var(--grad); color:#fff; border-color:transparent}
+.btn.warn{background:#fee2e2; color:var(--red); border-color:#fecaca}
+.btn.ghost{background:transparent}
+.btn.small{padding:6px 12px; font-size:13.5px}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.quick-row{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px}
+.entry-form,.settings-form{display:flex; gap:12px; flex-wrap:wrap; align-items:end}
+.entry-form label,.settings-form label{
+  display:flex; flex-direction:column; gap:5px; font-weight:700; font-size:14px; flex:1; min-width:150px;
+}
+input,select{
+  font-family:inherit; font-size:15px; padding:9px 12px; border:1px solid var(--line);
+  border-radius:10px; background:#fbfbff; color:var(--ink); width:100%;
+}
+input[type="time"],input[type="date"]{direction:ltr; text-align:center}
+
+/* ===== Lists ===== */
+.month-nav{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
+.days-list{display:flex; flex-direction:column; gap:8px}
+.day-row{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:#fbfbff;
+}
+.day-row .d-date{font-weight:900; min-width:118px}
+.day-row .d-info{color:var(--muted); font-size:14px; flex:1; min-width:180px}
+.day-row .chip{border-radius:999px; padding:2px 10px; font-size:12.5px; font-weight:700}
+.chip.ok{background:#d1fae5; color:#065f46}
+.chip.late{background:#ffedd5; color:#9a3412}
+.chip.ot{background:#dbeafe; color:#1e40af}
+.chip.miss{background:#fee2e2; color:#991b1b}
+.chip.off{background:#ede9fe; color:#5b21b6}
+.chip.cls{background:#e0e7ff; color:#3730a3}
+.day-row .del{margin-inline-start:auto}
+.icon-btn{background:none; border:0; cursor:pointer; font-size:16px}
+
+.bank-row{display:flex; gap:10px; margin:10px 0}
+.bank-slot{
+  flex:1; text-align:center; border-radius:14px; padding:14px; font-weight:900; font-size:16px;
+  background:#ede9fe; color:#5b21b6; border:2px dashed #c4b5fd;
+}
+.bank-slot.used{background:#f3f4f6; color:#9ca3af; border-style:solid; border-color:#e5e7eb; text-decoration:line-through}
+.big-total{font-size:30px; font-weight:900; text-align:center; padding:10px;
+  background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent}
+.empty{color:var(--muted); text-align:center; padding:16px; font-size:15px}
+.warn-text{color:var(--red); font-weight:700; font-size:14px}
+
+/* ===== Holidays / sync ===== */
+.holiday-row{display:flex; gap:10px; align-items:baseline; padding:8px 4px; border-bottom:1px dashed var(--line)}
+.holiday-row b{min-width:96px; font-variant-numeric:tabular-nums}
+.holiday-row.past{opacity:.45}
+.cors-note{
+  background:#fff7ed; border:1px solid #fdba74; color:#7c2d12; border-radius:14px;
+  padding:14px 16px; line-height:1.9; font-size:14.5px; margin-top:14px;
+}
+.sync-log{background:#0f0c29; color:#d6d3f5; border-radius:12px; padding:12px 14px;
+  font-size:13px; line-height:1.9; max-height:220px; overflow:auto; direction:rtl}
+.sync-log .t{color:#a5b4fc; direction:ltr; unicode-bidi:embed}
+.danger-zone{border-color:#fecaca}
+
+/* ===== Modal ===== */
+.modal{position:fixed; inset:0; background:rgba(15,12,41,.55); display:flex;
+  align-items:center; justify-content:center; z-index:50; padding:16px}
+.modal[hidden]{display:none}
+.modal-box{background:#fff; border-radius:18px; padding:22px; width:100%; max-width:440px; box-shadow:var(--shadow)}
+.modal-box h3{margin:0 0 14px}
+.modal-box form{display:flex; flex-direction:column; gap:12px}
+.modal-box label{display:flex; flex-direction:column; gap:5px; font-weight:700; font-size:14px}
+.modal-actions{display:flex; gap:10px; margin-top:6px}
+
+footer{text-align:center; color:var(--muted); font-size:13px; padding:10px}
+
+@media (max-width:560px){
+  .brand h1{font-size:24px}
+  .brand-logo{width:50px; height:50px}
+  .ring-wrap{width:200px; height:200px}
+  .ring{width:200px; height:200px}
+}
