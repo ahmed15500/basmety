@@ -136,15 +136,15 @@ function monthStats(monthDate){
   keys.forEach(k => {
     const rec = days[k];
     if(isWeekend(k) || isHoliday(k)) return;
-    if(rec && rec.classification){ s.classified.push({key, rec}); return; }
+    if(rec && rec.classification){ s.classified.push({key: k, rec}); return; }
     if(rec && rec.in){
       const c = computeDay(rec);
       if(c.worked !== null){
         s.workedDays++; s.workedMin += c.worked;
         s.overtimeMin += c.overtime;
-        if(c.overtime > 0) s.overtimeDays.push({key, rec, c});
+        if(c.overtime > 0) s.overtimeDays.push({key: k, rec, c});
       }
-      if(c.deficit > 0) s.deficitDays.push({key, rec, c});
+      if(c.deficit > 0) s.deficitDays.push({key: k, rec, c});
     } else if(k < tk){
       s.missingUnclassified++;
     }
@@ -316,6 +316,7 @@ function renderDays(){
       '<span class="d-info">'+esc(info)+'</span>' +
       dayChips(k, rec).join(" ") +
       (canClassify ? '<button class="btn small" data-classify="'+k+'">صنّف اليوم</button>' : "") +
+      ((rec && rec.classification) ? '<button class="btn small" data-classify="'+k+'">✏️ تعديل التصنيف</button>' : "") +
       (rec ? '<button class="icon-btn del" data-del="'+k+'" title="مسح اليوم">🗑️</button>' : "") +
       '</div>';
   }).join("");
@@ -429,8 +430,11 @@ function renderSummary(){
     else what = "أخرى — " + (cl.note || "");
     return '<div class="day-row"><span class="d-date">'+esc(prettyDate(x.key))+'</span>' +
       '<span class="d-info">'+esc(what)+'</span>' +
+      '<button class="icon-btn" data-editclassify="'+x.key+'" title="تعديل التصنيف">✏️</button>' +
       '<button class="icon-btn" data-unclassify="'+x.key+'" title="إلغاء التصنيف">↩️</button></div>';
   }).join("") : '<div class="empty">مفيش أيام متصنّفة الشهر ده</div>';
+  document.querySelectorAll("[data-editclassify]").forEach(b =>
+    b.addEventListener("click", () => openClassify(b.getAttribute("data-editclassify"))));
   document.querySelectorAll("[data-unclassify]").forEach(b =>
     b.addEventListener("click", () => {
       const k = b.getAttribute("data-unclassify");
@@ -800,6 +804,14 @@ function copyTextToClipboard(text, btn){
 function openClassify(k){
   classifyTarget = k;
   $("classifyDateLabel").textContent = prettyDate(k);
+  // إعادة ضبط النموذج + تعبئة التصنيف المحفوظ لو اليوم متصنّف أصلًا (وضع التعديل)
+  const cl = (days[k] && days[k].classification) || null;
+  $("classifyKind").value = cl ? cl.kind : "leave";
+  $("classifyLeaveType").value = (cl && cl.leaveType) ? cl.leaveType : "عارضة";
+  const leaveOtherIsNote = !!(cl && cl.kind === "leave" && cl.leaveType === "أخرى");
+  $("classifyLeaveOther").value = leaveOtherIsNote ? (cl.note || "") : "";
+  $("classifyDestination").value = (cl && cl.destination) ? cl.destination : "";
+  $("classifyNote").value = (cl && cl.note && !leaveOtherIsNote) ? cl.note : "";
   $("classifyModal").hidden = false;
   updateClassifyFields();
 }
@@ -809,7 +821,7 @@ function updateClassifyFields(){
   $("leaveTypeRow").hidden = kind !== "leave";
   $("leaveOtherRow").hidden = !(kind === "leave" && $("classifyLeaveType").value === "أخرى");
   $("missionRow").hidden = kind !== "mission";
-  $("noteRow").hidden = !(kind === "other" || (kind === "leave" && $("classifyLeaveType").value === "أخرى"));
+  $("noteRow").hidden = false; // الملحوظة اختيارية ودايمًا ظاهرة لأي نوع
   $("classifyDestination").required = kind === "mission";
 }
 $("classifyKind").addEventListener("change", updateClassifyFields);
@@ -819,7 +831,7 @@ $("classifyForm").addEventListener("submit", e => {
   e.preventDefault();
   if(!classifyTarget) return;
   const kind = $("classifyKind").value;
-  const cl = { kind };
+  const cl = { kind }; // سجل جديد من الصفر: أي حقل مش بتاع النوع المختار مش بيتحفظ (مفيش بقايا من تصنيف قديم)
   if(kind === "leave"){
     cl.leaveType = $("classifyLeaveType").value;
     if(cl.leaveType === "أخرى") cl.note = $("classifyLeaveOther").value.trim();
@@ -828,7 +840,10 @@ $("classifyForm").addEventListener("submit", e => {
     cl.destination = $("classifyDestination").value.trim();
     if(!cl.destination){ alert("لازم تكتب روحت فين في المأمورية"); return; }
   }
-  if(kind === "other") cl.note = $("classifyNote").value.trim();
+  // الملحوظة العامة اختيارية لأي نوع — بس في حالة إجازة/أخرى حقل note محجوز للنوع المكتوب نفسه
+  const note = $("classifyNote").value.trim();
+  if(note && cl.note === undefined) cl.note = note;
+  if(kind === "other" && cl.note === undefined) cl.note = note;
   const rec = days[classifyTarget] || { date: classifyTarget };
   rec.classification = cl;
   days[classifyTarget] = rec;
