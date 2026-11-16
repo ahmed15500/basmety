@@ -465,6 +465,232 @@ function renderAll(){
   renderHeader(); renderDays(); renderDeficit(); renderOvertime(); renderSummary(); renderHolidays(); renderSyncLog(); tickCountdown();
 }
 
+/* ============================================================
+   استيراد الـERP بضغطة واحدة (Bookmarklet)
+   الفكرة: المستخدم بيسجّل دخول في الـERP على جهازه زي العادة،
+   والزرار بيشتغل جوه أصل الـERP نفسه (نفس الجلسة) — الباسورد
+   مش بيعدي على بصمتي أصلًا، ومفيش سيرفر وسيط.
+   ============================================================ */
+
+/* ===TEST-EXTRACT-BEGIN=== */
+/* الدالة دي مش بتتنفذ جوه بصمتي أبدًا — بناخد نصّها البرمجي ونحوّله لزرار مفضلة.
+   لازم تفضل مكتفية ذاتيًا تمامًا: متستخدمش أي متغير أو دالة من بصمتي. */
+function erpExporter(){
+  var T = function(m){
+    var d = document.createElement("div");
+    d.textContent = m;
+    d.style.cssText = "position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:999999;background:#1e1b3a;color:#fff;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:15px;line-height:1.8;direction:rtl;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:92%";
+    document.body.appendChild(d);
+    setTimeout(function(){ d.remove(); }, 8000);
+  };
+  var LOGIN_MSG = "بصمتي: سجّل دخول في الـERP الأول وبعدين دوس الزرار تاني";
+  if(/login/i.test(location.pathname + location.hash)){ T(LOGIN_MSG); return; }
+  var collected = {};
+  function addDay(dt, tm, st){
+    if(!dt || !tm || !st) return;
+    var r = collected[dt] || (collected[dt] = {});
+    if(st === "IN"){ if(!r.in || tm < r.in) r.in = tm; }
+    if(st === "OUT"){ if(!r.out || tm > r.out) r.out = tm; }
+  }
+  function jget(u){
+    return fetch(u, { credentials: "include" }).then(function(r){
+      if(!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    });
+  }
+  var p = Promise.resolve();
+  /* استراتيجية أ: Employee Checkin */
+  p = p.then(function(){
+    return jget("/api/resource/Employee%20Checkin?fields=" + encodeURIComponent("[\"time\",\"log_type\"]") + "&order_by=time%20asc&limit_page_length=500")
+      .then(function(j){
+        (j.data || []).forEach(function(x){
+          if(!x || !x.time) return;
+          addDay(String(x.time).slice(0, 10), String(x.time).slice(11, 16), x.log_type);
+        });
+      }).catch(function(){});
+  });
+  /* استراتيجية ب: Attendance */
+  p = p.then(function(){
+    if(Object.keys(collected).length) return;
+    return jget("/api/resource/Attendance?fields=" + encodeURIComponent("[\"attendance_date\",\"in_time\",\"out_time\"]") + "&order_by=attendance_date%20asc&limit_page_length=200")
+      .then(function(j){
+        (j.data || []).forEach(function(x){
+          if(!x || !x.attendance_date) return;
+          var r = {};
+          if(x.in_time) r.in = String(x.in_time).slice(11, 16);
+          if(x.out_time) r.out = String(x.out_time).slice(11, 16);
+          if(r.in || r.out) collected[x.attendance_date] = r;
+        });
+      }).catch(function(){});
+  });
+  /* استراتيجية ج: كشط صفحة CheckIn/CheckOut + متابعة ترقيم الصفحات (٥ صفحات كحد أقصى) */
+  p = p.then(function(){
+    if(Object.keys(collected).length) return;
+    var base = location.origin + "/hri/en/check_in_out";
+    var seen = {}, queue = [], fetched = 0;
+    function rowsFrom(doc){
+      var trs = doc.querySelectorAll("tr");
+      for(var i = 0; i < trs.length; i++){
+        var tds = trs[i].querySelectorAll("td"), dt = null, tm = null, st = null;
+        for(var c = 0; c < tds.length; c++){
+          var cell = tds[c].textContent.trim();
+          var m = cell.match(/([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}:[0-9]{2})/);
+          if(m){ dt = m[1]; tm = m[2]; }
+          if(cell === "IN" || cell === "OUT") st = cell;
+        }
+        if(dt && st) addDay(dt, tm, st);
+      }
+      var links = doc.querySelectorAll("a[href]");
+      for(var k = 0; k < links.length; k++){
+        var h = links[k].getAttribute("href") || "";
+        if(/page/i.test(h)){
+          try{
+            var abs = new URL(h, base).href;
+            if(!seen[abs] && queue.indexOf(abs) < 0) queue.push(abs);
+          }catch(e){}
+        }
+      }
+    }
+    rowsFrom(document);
+    function next(){
+      if(!queue.length || fetched >= 4) return Promise.resolve();
+      var u = queue.shift();
+      if(seen[u]) return next();
+      seen[u] = 1; fetched++;
+      return fetch(u, { credentials: "include" }).then(function(r){ return r.text(); })
+        .then(function(h){ rowsFrom(new DOMParser().parseFromString(h, "text/html")); })
+        .catch(function(){}).then(next);
+    }
+    return fetch(base, { credentials: "include" }).then(function(r){ return r.text(); })
+      .then(function(h){ rowsFrom(new DOMParser().parseFromString(h, "text/html")); })
+      .catch(function(){}).then(next);
+  });
+  p.then(function(){
+    var ks = Object.keys(collected);
+    if(!ks.length){ T(LOGIN_MSG); return; }
+    var payload = { v: 1, src: "erp", exportedAt: new Date().toISOString(), days: collected };
+    var json = JSON.stringify(payload);
+    var b = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    var done = function(){
+      window.open("https://ahmed15500.github.io/basmety/#import=" + b, "_blank");
+      T("بصمتي: تم تجهيز " + ks.length + " يوم — اتفتح تبويب بصمتي، لو ما اتفتحش الصق اللي اتنسخ في خانة الاستيراد هناك");
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(json).then(done, done);
+    } else {
+      try{
+        var ta = document.createElement("textarea");
+        ta.value = json; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); ta.remove();
+      }catch(e){}
+      done();
+    }
+  });
+}
+const ERP_EXPORTER_SRC = "(" + erpExporter.toString() + ")();";
+const BOOKMARKLET_HREF = "javascript:" + encodeURIComponent(ERP_EXPORTER_SRC);
+
+function b64urlDecode(s){
+  s = String(s || "").replace(/-/g, "+").replace(/_/g, "/");
+  while(s.length % 4) s += "=";
+  return decodeURIComponent(escape(atob(s)));
+}
+/* الدمج بيكتب in/out بس: مش بيمس أي تصنيف موجود، ومش بيمسح out يدوي لو الاستيراد معندوش out */
+function mergeImportedDays(srcDays){
+  var n = 0;
+  Object.keys(srcDays || {}).forEach(function(dk){
+    if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dk)) return;
+    var src = srcDays[dk] || {};
+    var hasIn = /^[0-9]{2}:[0-9]{2}$/.test(src.in || "");
+    var hasOut = /^[0-9]{2}:[0-9]{2}$/.test(src.out || "");
+    if(!hasIn && !hasOut) return;
+    var rec = days[dk] || { date: dk };
+    if(hasIn) rec.in = src.in;
+    if(hasOut) rec.out = src.out;
+    days[dk] = rec;
+    n++;
+  });
+  return n;
+}
+/* بيقبل: JSON خام، أو لينك/نص فيه #import=، أو base64url لوحده. بيرجع عدد الأيام أو ‎-1‎ لو البيانات مش مفهومة */
+function importPayload(text){
+  text = String(text || "").trim();
+  if(!text) return 0;
+  var payload = null;
+  try{
+    var m = text.match(/#import=([A-Za-z0-9\-_]+)/);
+    if(m) payload = JSON.parse(b64urlDecode(m[1]));
+    else if(text.charAt(0) === "{") payload = JSON.parse(text);
+    else payload = JSON.parse(b64urlDecode(text));
+  }catch(e){ return -1; }
+  if(!payload || typeof payload !== "object" || !payload.days || typeof payload.days !== "object") return -1;
+  var n = mergeImportedDays(payload.days);
+  if(n > 0){ saveDays(); logSync("استيراد من الـERP: " + n + " يوم"); }
+  return n;
+}
+/* ===TEST-EXTRACT-END=== */
+
+function showImportBanner(n){
+  var b = $("importBanner"), t = $("importBannerText");
+  if(!b || !t) return;
+  if(n > 0){
+    b.classList.add("ok");
+    t.textContent = "✅ تم استيراد " + n + " يوم من الـERP";
+  } else {
+    b.classList.remove("ok");
+    t.textContent = "⚠️ بيانات الاستيراد مش مفهومة — جرّب النسخ واللصق اليدوي من كارت «الاستيراد من الـERP بضغطة واحدة» في الإعدادات";
+  }
+  b.hidden = false;
+}
+function handleImportHash(){
+  if(!location.hash || location.hash.indexOf("#import=") !== 0) return;
+  var n = importPayload(location.hash);
+  try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
+  showImportBanner(n);
+}
+function fallbackCopyText(text){
+  try{
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }catch(e){}
+}
+function copyTextToClipboard(text, btn){
+  var done = function(){
+    if(!btn) return;
+    var old = btn.textContent;
+    btn.textContent = "✅ اتنسخ";
+    setTimeout(function(){ btn.textContent = old; }, 2000);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){ fallbackCopyText(text); done(); });
+  } else { fallbackCopyText(text); done(); }
+}
+(function wireImportUi(){
+  var bm = $("bookmarkletLink");
+  if(bm){
+    bm.setAttribute("href", BOOKMARKLET_HREF);
+    bm.addEventListener("click", function(e){
+      e.preventDefault();
+      alert("الزرار ده بيتداس وانت جوه موقع الـERP نفسه — هنا اسحبه لشريط المفضلة أو انسخ الكود بتاعه من الزرار اللي جنبه.");
+    });
+  }
+  var bc = $("btnCopyBookmarklet");
+  if(bc) bc.addEventListener("click", function(){ copyTextToClipboard(BOOKMARKLET_HREF, bc); });
+  var bi = $("btnCopyIosCode");
+  if(bi) bi.addEventListener("click", function(){ copyTextToClipboard(ERP_EXPORTER_SRC, bi); });
+  var bp = $("btnPasteImport");
+  if(bp) bp.addEventListener("click", function(){
+    var n = importPayload($("importPaste").value);
+    if(n > 0){ $("importPaste").value = ""; showImportBanner(n); renderAll(); }
+    else if(n === 0) alert("مفيش أيام صالحة في البيانات دي — اتأكد إنك لزقت اللي اتنسخ من الـERP زي ما هو.");
+    else alert("البيانات مش مفهومة — الصق اللي اتنسخ من الـERP زي ما هو (JSON أو لينك فيه #import=).");
+  });
+  var cb = $("importBannerClose");
+  if(cb) cb.addEventListener("click", function(){ $("importBanner").hidden = true; });
+})();
+
 /* ---------- تصنيف يوم بلا بصمة ---------- */
 function openClassify(k){
   classifyTarget = k;
@@ -685,6 +911,7 @@ document.querySelectorAll("#tabs button").forEach(b =>
   $("setRequiredHours").value = settings.requiredHours;
   $("erpEmail").value = localStorage.getItem("basmety_erp_email") || "";
   $("entryDate").value = todayKey();
+  handleImportHash();
   renderAll();
   setInterval(tickCountdown, 1000);
 })();

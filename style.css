@@ -187,6 +187,8 @@ body{
 }
 .alert-banner button{background:var(--alert-btn); color:#fff; border:0; border-radius:10px;
   padding:6px 14px; font-family:inherit; font-weight:700; cursor:pointer; margin-inline-start:8px}
+.alert-banner.ok{background:var(--chip-ok-bg); border-color:var(--ot); color:var(--chip-ok-ink)}
+.alert-banner.ok button{background:var(--ot); color:#fff}
 
 /* ===== Layout / cards ===== */
 main{max-width:980px; margin:0 auto; padding:16px}
@@ -296,6 +298,18 @@ input[type="time"],input[type="date"]{direction:ltr; text-align:center}
 .sync-log{background:var(--log-bg); color:var(--log-ink); border-radius:12px; padding:12px 14px;
   font-size:13px; line-height:1.9; max-height:220px; overflow:auto; direction:rtl}
 .sync-log .t{color:var(--log-t); direction:ltr; unicode-bidi:embed}
+
+/* ===== استيراد الـERP بضغطة واحدة ===== */
+.import-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+#bookmarkletLink{cursor:grab; text-decoration:none; display:inline-block}
+#bookmarkletLink:active{cursor:grabbing}
+.steps{line-height:2; padding-inline-start:24px; font-size:14.5px; margin:6px 0 4px}
+.steps li{margin-bottom:2px}
+textarea{
+  font-family:inherit; font-size:13.5px; padding:9px 12px; border:1px solid var(--line);
+  border-radius:10px; background:var(--input-bg); color:var(--ink); width:100%;
+  color-scheme:var(--scheme); resize:vertical;
+}
 .danger-zone{border-color:var(--warn-border)}
 
 /* ===== Modal ===== */
